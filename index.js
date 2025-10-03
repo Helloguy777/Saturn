@@ -1,33 +1,39 @@
-import { createServer } from "http";
+import { createServer as createHttpsServer } from "https";
 import { join } from "path";
+import fs from "fs";
 import express from "express";
 import { routeRequest } from "wisp-server-node";
 import { uvPath } from "@titaniumnetwork-dev/ultraviolet";
 import { epoxyPath } from "@mercuryworkshop/epoxy-transport";
 import { libcurlPath } from "@mercuryworkshop/libcurl-transport";
 import { baremuxPath } from "@mercuryworkshop/bare-mux/node";
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { fileURLToPath } from "url";
+import { dirname } from "path";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const port = parseInt(process.env.PORT || "8080", 10);
-const info = {
-    "version": "1.0",
-};
+const port = parseInt(process.env.PORT || "443", 10);
+
+const info = { version: "1.0" };
 
 const startup_msg = `
 | SaturnProxy ${info.version} |
 
 Running on:
-    http://localhost:${port}
+    https://localhost:${port}
 `;
 
 const pubDir = join(__dirname, "public");
 
 const app = express();
-const server = createServer(app);
+
+const tlsOptions = {
+    key: fs.readFileSync("/etc/letsencrypt/live/edu-portal.live/privkey.pem"),
+    cert: fs.readFileSync("/etc/letsencrypt/live/edu-portal.live/fullchain.pem"),
+};
+
+const server = createHttpsServer(tlsOptions, app);
 
 app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -46,11 +52,9 @@ app.use((req, res, next) => {
 });
 
 app.use(express.static(pubDir));
-
 app.get("/uv/uv.config.js", (req, res) => {
     res.sendFile(join(pubDir, "uv/uv.config.js"));
 });
-
 app.use("/uv/", express.static(uvPath));
 app.use("/libcurl/", express.static(libcurlPath));
 app.use("/epoxy/", express.static(epoxyPath));
@@ -68,6 +72,9 @@ server.on("upgrade", (req, socket, head) => {
     }
 });
 
+server.listen(port, "0.0.0.0", () => {
+    console.log(startup_msg);
+});
 server.listen(port, "0.0.0.0", () => {
     console.log(startup_msg);
 });
